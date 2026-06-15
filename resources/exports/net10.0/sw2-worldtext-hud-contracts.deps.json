@@ -1,0 +1,23 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v10.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v10.0": {
+      "sw2-worldtext-hud-contracts/1.0.0": {
+        "runtime": {
+          "sw2-worldtext-hud-contracts.dll": {}
+        }
+      }
+    }
+  },
+  "libraries": {
+    "sw2-worldtext-hud-contracts/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}
