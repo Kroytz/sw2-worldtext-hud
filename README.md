@@ -4,7 +4,7 @@ A shared HUD management plugin for [SwiftlyS2](https://github.com/swiftly-soluti
 
 Other plugins can register HUD entries through the shared interface and update their content at any time. Players can customize the position, font size, and visibility of each registered HUD entry via chat commands or an in-game menu.
 
-## Features
+> 💡 **Note:** This project was ported through the collaborative efforts of multiple AI agents. The code may be a mess.
 
 - **Shared HUD API** — Any plugin can register and update HUD entries via `IHudManagerApi`
 - **View-angle tracking** — HUD elements stay fixed on screen by tracking each player's camera orientation every tick
