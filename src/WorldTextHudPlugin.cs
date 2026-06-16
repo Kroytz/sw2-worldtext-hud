@@ -19,6 +19,7 @@ namespace WorldTextHud;
 public sealed partial class WorldTextHudPlugin : BasePlugin
 {
     private readonly ILogger<WorldTextHudPlugin>? _logger;
+    private bool _loaded;
 
     public static new ISwiftlyCore Core { get; private set; } = null!;
 
@@ -30,21 +31,26 @@ public sealed partial class WorldTextHudPlugin : BasePlugin
     public override void Load(bool hotReload)
     {
         Core = base.Core;
+        _loaded = true;
 
         Core.Event.OnTick += OnTick;
         Core.Event.OnMapLoad += OnMapLoad;
         Core.Event.OnMapUnload += OnMapUnload;
         Core.Event.OnClientDisconnected += OnClientDisconnected;
+        Core.Event.OnClientPutInServer += OnClientPutInServer;
 
         RegisterAllCommands();
     }
 
     public override void Unload()
     {
+        _loaded = false;
+
         Core.Event.OnTick -= OnTick;
         Core.Event.OnMapLoad -= OnMapLoad;
         Core.Event.OnMapUnload -= OnMapUnload;
         Core.Event.OnClientDisconnected -= OnClientDisconnected;
+        Core.Event.OnClientPutInServer -= OnClientPutInServer;
 
         UnregisterAllCommands();
         CleanupAllEntities();
@@ -71,6 +77,22 @@ public sealed partial class WorldTextHudPlugin : BasePlugin
     private void OnClientDisconnected(IOnClientDisconnectedEvent @event)
     {
         CleanupPlayer(@event.PlayerId);
+    }
+
+    private void OnClientPutInServer(IOnClientPutInServerEvent @event)
+    {
+        var playerId = @event.PlayerId;
+        Core.Scheduler.NextWorldUpdate(() =>
+        {
+            if (!_loaded)
+                return;
+
+            var player = Core.PlayerManager.GetPlayer(playerId);
+            if (player == null || !player.IsValid)
+                return;
+
+            SyncPlayerStateForEntries(player);
+        });
     }
 
     /// <summary>

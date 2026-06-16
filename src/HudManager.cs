@@ -64,6 +64,9 @@ public sealed partial class WorldTextHudPlugin
         var content = text ?? string.Empty;
         entry.CurrentText = content;
 
+        if (!string.IsNullOrEmpty(content))
+            EnsureEntryForOnlinePlayers(entry);
+
         foreach (var playerState in _playerStates.Values)
         {
             if (!playerState.Entries.TryGetValue(entry.Key, out var entryState))
@@ -139,6 +142,31 @@ public sealed partial class WorldTextHudPlugin
                 entry.Config.DefaultY,
                 entry.Config.DefaultFontSize,
                 NativeColor.FromBuiltin(entry.Config.DefaultColor));
+        }
+    }
+
+    private void EnsureEntryForOnlinePlayers(RegisteredEntry entry)
+    {
+        foreach (var player in Core.PlayerManager.GetAllValidPlayers())
+        {
+            if (!player.IsValid)
+                continue;
+
+            var state = GetOrCreatePlayerState(player);
+            EnsurePlayerEntry(state, entry);
+        }
+    }
+
+    private void SyncPlayerStateForEntries(IPlayer player)
+    {
+        var state = GetOrCreatePlayerState(player);
+
+        foreach (var entry in _entries.Values)
+        {
+            EnsurePlayerEntry(state, entry);
+
+            if (!string.IsNullOrEmpty(entry.CurrentText))
+                SetEntryPlayerText(entry, state.SteamId, entry.CurrentText);
         }
     }
 
