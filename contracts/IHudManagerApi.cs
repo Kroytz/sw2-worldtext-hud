@@ -45,4 +45,9 @@ public interface IHudEntry
     /// 设置显示内容。对所有玩家生效。传空字符串或 null 隐藏。
     /// </summary>
     void SetText(string? text);
+
+    /// <summary>
+    /// 设置指定玩家的显示内容。仅更新该玩家的实体。传空字符串或 null 隐藏该玩家的 HUD。
+    /// </summary>
+    void SetPlayerText(ulong steamId, string? text);
 }

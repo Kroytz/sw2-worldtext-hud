@@ -220,6 +220,97 @@ public sealed partial class WorldTextHudPlugin
         }
     }
 
+    private void SetEntryPlayerText(RegisteredEntry entry, ulong steamId, string? text)
+    {
+        var content = text ?? string.Empty;
+
+        if (!_playerStates.TryGetValue(steamId, out var playerState))
+        {
+            var player = Core.PlayerManager.GetAllValidPlayers()
+                .FirstOrDefault(candidate => GetPlayerStateKey(candidate) == steamId);
+            if (player == null)
+                return;
+
+            playerState = GetOrCreatePlayerState(player);
+        }
+
+        if (!playerState.Entries.TryGetValue(entry.Key, out var entryState))
+        {
+            EnsurePlayerEntry(playerState, entry);
+            if (!playerState.Entries.TryGetValue(entry.Key, out entryState))
+                return;
+        }
+
+        if (!TryResolvePlayer(playerState, out var owner))
+            return;
+
+        playerState.PlayerId = owner.PlayerID;
+
+        if (entryState.Hidden)
+            return;
+
+        if (string.IsNullOrEmpty(content))
+        {
+            if (entryState.Entity is { IsValidEntity: true } entity)
+            {
+                entity.Enabled = false;
+                entity.EnabledUpdated();
+            }
+            entryState.LastText = string.Empty;
+            return;
+        }
+
+        if (entryState.LastText == content)
+            return;
+
+        entryState.LastText = content;
+
+        if (entryState.Entity == null || !entryState.Entity.IsValidEntity)
+        {
+            CreateEntityForPlayer(owner, entry, entryState);
+        }
+
+        if (entryState.Entity is { IsValidEntity: true } ent)
+        {
+            ent.MessageText = content;
+            ent.MessageTextUpdated();
+            ent.Enabled = true;
+            ent.EnabledUpdated();
+        }
+    }
+
+    private static ulong GetPlayerStateKey(IPlayer player)
+    {
+        return player.SteamID != 0 ? player.SteamID : 0x8000000000000000UL | (ulong)player.SessionId;
+    }
+
+    private static bool IsSamePlayerState(IPlayer player, PlayerHudState state)
+    {
+        return GetPlayerStateKey(player) == state.SteamId;
+    }
+
+    private bool TryResolvePlayer(PlayerHudState state, out IPlayer player)
+    {
+        var current = Core.PlayerManager.GetPlayer(state.PlayerId);
+        if (current != null && current.IsValid && IsSamePlayerState(current, state))
+        {
+            player = current;
+            return true;
+        }
+
+        foreach (var candidate in Core.PlayerManager.GetAllValidPlayers())
+        {
+            if (!IsSamePlayerState(candidate, state))
+                continue;
+
+            player = candidate;
+            return true;
+        }
+
+        player = null!;
+        return false;
+    }
+
     /// <summary>
     /// IHudEntry handle implementation. Holds a reference to the RegisteredEntry and calls back
     /// into the plugin for SetText.
@@ -231,6 +322,11 @@ public sealed partial class WorldTextHudPlugin
         public void SetText(string? text)
         {
             plugin.SetEntryText(entry, text);
+        }
+
+        public void SetPlayerText(ulong steamId, string? text)
+        {
+            plugin.SetEntryPlayerText(entry, steamId, text);
         }
     }
 }
