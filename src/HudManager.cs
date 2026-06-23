@@ -177,7 +177,7 @@ public sealed partial class WorldTextHudPlugin
     {
         try
         {
-            var entity = Core.EntitySystem.CreateEntity<CPointWorldText>();
+            var entity = Core.EntitySystem.CreateEntityByDesignerName<CPointWorldText>("point_worldtext");
             if (!entity.IsValid || !entity.IsValidEntity)
                 return null;
 
@@ -187,15 +187,14 @@ public sealed partial class WorldTextHudPlugin
             // (ZEPlayer::CreateEntwatchHud forces 255 -> 254).
             var color = entryState.Color;
             entity.Color = color.A == 255 ? new NativeColor((int)color.R, (int)color.G, (int)color.B, 254) : color;
-            entity.ColorUpdated();
 
             entity.Fullbright = true;
+
             entity.WorldUnitsPerPx = 0.005f;
 
             // CS2Fixes sets m_FontName = "Verdana Bold". point_worldtext renders nothing when the
             // font name is empty, so this is required for the text to show.
             entity.FontName = "Verdana Bold";
-            entity.FontNameUpdated();
 
             entity.JustifyHorizontal = PointWorldTextJustifyHorizontal_t.POINT_WORLD_TEXT_JUSTIFY_HORIZONTAL_LEFT;
             // CS2Fixes uses POINT_WORLD_TEXT_JUSTIFY_VERTICAL_TOP.
@@ -203,6 +202,16 @@ public sealed partial class WorldTextHudPlugin
             entity.MessageText = entryState.LastText;
             entity.Enabled = !entryState.Hidden;
             entity.DispatchSpawn();
+
+            // Update every shits
+            entity.MessageTextUpdated();
+            entity.JustifyVerticalUpdated();
+            entity.JustifyHorizontalUpdated();
+            entity.FontNameUpdated();
+            entity.WorldUnitsPerPxUpdated();
+            entity.FullbrightUpdated();
+            entity.ColorUpdated();
+            entity.EnabledUpdated();
 
             // Only visible to this player
             entity.SetTransmitState(false);
