@@ -73,8 +73,8 @@ public sealed partial class WorldTextHudPlugin
             float.TryParse(context.Args[0], out var x) &&
             float.TryParse(context.Args[1], out var y))
         {
-            entryState.X = Math.Clamp(x, 0.0f, 1.0f);
-            entryState.Y = Math.Clamp(y, 0.0f, 1.0f);
+            entryState.X = Math.Clamp(x, MinHudPosition, MaxHudPosition);
+            entryState.Y = Math.Clamp(y, MinHudPosition, MaxHudPosition);
             SaveUserPreferences(state);
             player.SendChat($"[HUD] {entry.DisplayName} position set to ({entryState.X:F2}, {entryState.Y:F2}).");
         }

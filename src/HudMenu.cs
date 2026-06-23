@@ -48,7 +48,7 @@ public sealed partial class WorldTextHudPlugin
         builder.Design.SetMenuTitle($"{displayName} Settings");
 
         // X position slider
-        var xSlider = new SliderMenuOption($"X Position", 0.0f, 1.0f, entryState.X, 0.01f, 20);
+        var xSlider = new SliderMenuOption($"X Position", MinHudPosition, MaxHudPosition, entryState.X, 0.01f, 40);
         xSlider.ValueChanged += (_, e) =>
         {
             if (!_playerStates.TryGetValue(player.SteamID, out var s) ||
@@ -61,7 +61,7 @@ public sealed partial class WorldTextHudPlugin
         builder.AddOption(xSlider);
 
         // Y position slider
-        var ySlider = new SliderMenuOption($"Y Position", 0.0f, 1.0f, entryState.Y, 0.01f, 20);
+        var ySlider = new SliderMenuOption($"Y Position", MinHudPosition, MaxHudPosition, entryState.Y, 0.01f, 40);
         ySlider.ValueChanged += (_, e) =>
         {
             if (!_playerStates.TryGetValue(player.SteamID, out var s) ||

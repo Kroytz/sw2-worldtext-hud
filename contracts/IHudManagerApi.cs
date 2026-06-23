@@ -12,11 +12,17 @@ public sealed class HudEntryConfig
 {
     public string Key { get; }
     public string DisplayName { get; }
-    public float DefaultX { get; init; } = 0.0f;
-    public float DefaultY { get; init; } = 0.5f;
-    public float DefaultFontSize { get; init; } = 24.0f;
+    public float DefaultX { get; init; } = -7.5f;
+    public float DefaultY { get; init; } = -2.0f;
+    public float DefaultFontSize { get; init; } = 60.0f;
     public System.Drawing.Color DefaultColor { get; init; } = System.Drawing.Color.White;
 
+    /// <remarks>
+    /// Position defaults (<see cref="DefaultX"/>, <see cref="DefaultY"/>) are direct world-unit
+    /// offsets from the player's eye in the eye-angle right/up directions, matching CS2Fixes'
+    /// entwatch HUD placement (origin += right * X; origin -= up * Y). Default is the CS2Fixes
+    /// default of (-7.5, -2.0).
+    /// </remarks>
     public HudEntryConfig(string key, string displayName)
     {
         Key = key;

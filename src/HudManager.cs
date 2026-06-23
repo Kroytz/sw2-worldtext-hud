@@ -9,6 +9,9 @@ namespace WorldTextHud;
 
 public sealed partial class WorldTextHudPlugin
 {
+    private const float MinHudPosition = -10.0f;
+    private const float MaxHudPosition = 10.0f;
+
     /// <summary>
     /// All registered HUD entries, keyed by their unique key.
     /// </summary>
@@ -179,11 +182,24 @@ public sealed partial class WorldTextHudPlugin
                 return null;
 
             entity.FontSize = entryState.FontSize;
-            entity.Color = entryState.Color;
+
+            // CS2Fixes caps alpha at 254 so the text stays visible through world geometry / items
+            // (ZEPlayer::CreateEntwatchHud forces 255 -> 254).
+            var color = entryState.Color;
+            entity.Color = color.A == 255 ? new NativeColor((int)color.R, (int)color.G, (int)color.B, 254) : color;
+            entity.ColorUpdated();
+
             entity.Fullbright = true;
             entity.WorldUnitsPerPx = 0.005f;
+
+            // CS2Fixes sets m_FontName = "Verdana Bold". point_worldtext renders nothing when the
+            // font name is empty, so this is required for the text to show.
+            entity.FontName = "Verdana Bold";
+            entity.FontNameUpdated();
+
             entity.JustifyHorizontal = PointWorldTextJustifyHorizontal_t.POINT_WORLD_TEXT_JUSTIFY_HORIZONTAL_LEFT;
-            entity.JustifyVertical = PointWorldTextJustifyVertical_t.POINT_WORLD_TEXT_JUSTIFY_VERTICAL_BOTTOM;
+            // CS2Fixes uses POINT_WORLD_TEXT_JUSTIFY_VERTICAL_TOP.
+            entity.JustifyVertical = PointWorldTextJustifyVertical_t.POINT_WORLD_TEXT_JUSTIFY_VERTICAL_TOP;
             entity.MessageText = entryState.LastText;
             entity.Enabled = !entryState.Hidden;
             entity.DispatchSpawn();
