@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using SwiftlyS2.Shared.Natives;
 using SwiftlyS2.Shared.Players;
 using SwiftlyS2.Shared.SchemaDefinitions;
 using WorldTextHud.Contracts;
@@ -100,7 +101,7 @@ public sealed partial class WorldTextHudPlugin
             {
                 var player = Core.PlayerManager.GetPlayer(playerState.PlayerId);
                 if (player != null && player.IsValid)
-                    CreateEntityForPlayer(player, entry, entryState);
+                    CreateEntityForPlayer(player, playerState, entry, entryState);
             }
 
             if (entryState.Entity is { IsValidEntity: true } ent)
@@ -173,10 +174,50 @@ public sealed partial class WorldTextHudPlugin
         }
     }
 
-    private CPointWorldText? CreateEntityForPlayer(IPlayer player, RegisteredEntry entry, PlayerEntryState entryState)
+    /// <summary>
+    /// Rebuilds the player's HUD against their current pawn. Called on pawn spawn (mirrors
+    /// CS2Fixes ZEPlayer::OnSpawn recreating the point_orient and HUD text). The old text entities
+    /// were parented to the now-stale orient, so they are destroyed and recreated.
+    /// </summary>
+    private void RebuildPlayerHudForCurrentPawn(CEntityInstance pawnEntity)
+    {
+        var pawn = pawnEntity.As<CCSPlayerPawn>();
+        if (!pawn.IsValid)
+            return;
+
+        var player = Core.PlayerManager.GetPlayerFromPawn(pawn);
+        if (player == null || !player.IsValid)
+            return;
+
+        var state = GetOrCreatePlayerState(player);
+
+        // Drop the old orient (parented to the previous pawn) so it is recreated on next use.
+        if (state.Orient is { IsValidEntity: true } oldOrient)
+            oldOrient.Despawn();
+        state.Orient = null;
+        state.OrientPawnAddress = 0;
+
+        // Destroy text entities that were parented to the old orient.
+        foreach (var entryState in state.Entries.Values)
+        {
+            DestroyEntity(entryState);
+            entryState.LastText = string.Empty;
+        }
+
+        SyncPlayerStateForEntries(player);
+    }
+
+    private CPointWorldText? CreateEntityForPlayer(IPlayer player, PlayerHudState state, RegisteredEntry entry, PlayerEntryState entryState)
     {
         try
         {
+            // The text is parented to a per-player point_orient that auto-tracks the eye
+            // orientation (CS2Fixes: ZEPlayer::CreatePointOrient + CreateEntwatchHud). Ensure it
+            // exists before spawning the text.
+            var orient = EnsurePointOrient(player, state);
+            if (orient == null)
+                return null;
+
             var entity = Core.EntitySystem.CreateEntityByDesignerName<CPointWorldText>("point_worldtext");
             if (!entity.IsValid || !entity.IsValidEntity)
                 return null;
@@ -213,6 +254,27 @@ public sealed partial class WorldTextHudPlugin
             entity.ColorUpdated();
             entity.EnabledUpdated();
 
+            // Parent the text to the orient so it follows the player automatically
+            // (CS2Fixes: pText->AcceptInput("SetParent", "!activator", pOrient)).
+            entity.AcceptInput("SetParent", "!activator", orient);
+
+            // Place the text relative to the orient's current transform
+            // (CS2Fixes: origin/angles derived from pOrient->GetAbsOrigin/GetAbsRotation).
+            var origin = orient.AbsOrigin ?? Vector.Zero;
+            var vmangles = orient.AbsRotation ?? QAngle.Zero;
+            vmangles.ToDirectionVectors(out var forward, out var right, out var up);
+
+            origin += forward * HudForwardDistance;
+            origin += right * entryState.X;
+            origin -= up * entryState.Y;
+
+            // CS2Fixes orientation: text plane always faces the eye.
+            //   angles.x = 0
+            //   angles.y = eyeYaw - 90
+            //   angles.z = -eyePitch + 90
+            var angles = new QAngle(0.0f, vmangles.Yaw - 90.0f, -vmangles.Pitch + 90.0f);
+            entity.Teleport(origin, angles, null);
+
             // Only visible to this player
             entity.SetTransmitState(false);
             entity.SetTransmitState(true, player.PlayerID);
@@ -228,6 +290,62 @@ public sealed partial class WorldTextHudPlugin
         {
             return null;
         }
+    }
+
+    /// <summary>
+    /// Returns the player's point_orient, rebuilding it if missing or parented to a stale pawn
+    /// (e.g. after respawn). Mirrors CS2Fixes ZEPlayer::CreatePointOrient.
+    /// </summary>
+    private CPointOrient? EnsurePointOrient(IPlayer player, PlayerHudState state)
+    {
+        var pawn = player.PlayerPawn;
+        if (pawn == null || !pawn.IsValid)
+            return state.Orient is { IsValidEntity: true } existing ? existing : null;
+
+        if (state.Orient is { IsValidEntity: true } orient && state.OrientPawnAddress == pawn.Address)
+            return orient;
+
+        return CreatePointOrient(player, state);
+    }
+
+    /// <summary>
+    /// Creates the per-player point_orient that tracks the owner's eye orientation. The text
+    /// entities are parented to it. Mirrors CS2Fixes ZEPlayer::CreatePointOrient.
+    /// </summary>
+    private CPointOrient? CreatePointOrient(IPlayer player, PlayerHudState state)
+    {
+        var pawn = player.PlayerPawn;
+        if (pawn == null || !pawn.IsValid)
+            return null;
+
+        // CS2Fixes removes any existing orient before creating a new one.
+        if (state.Orient is { IsValidEntity: true } oldOrient)
+            oldOrient.Despawn();
+
+        var orient = Core.EntitySystem.CreateEntityByDesignerName<CPointOrient>("point_orient");
+        if (!orient.IsValid || !orient.IsValidEntity)
+        {
+            state.Orient = null;
+            state.OrientPawnAddress = 0;
+            return null;
+        }
+
+        orient.Active = true;
+        orient.GoalDirection = PointOrientGoalDirectionType_t.eEyesForward;
+        orient.DispatchSpawn();
+
+        // Spawn at the eye position (CS2Fixes: Teleport to GetEyePosition).
+        if (pawn.EyePosition is { } eyeOrigin)
+            orient.Teleport(eyeOrigin, null, null);
+
+        // Parent to the pawn and target the pawn so eEyesForward tracks it
+        // (CS2Fixes: AcceptInput "SetParent"/"SetTarget" "!activator" pPawn).
+        orient.AcceptInput("SetParent", "!activator", pawn);
+        orient.AcceptInput("SetTarget", "!activator", pawn);
+
+        state.Orient = orient;
+        state.OrientPawnAddress = pawn.Address;
+        return orient;
     }
 
     private static void DestroyEntity(PlayerEntryState entryState)
@@ -253,6 +371,8 @@ public sealed partial class WorldTextHudPlugin
         {
             foreach (var entryState in playerState.Entries.Values)
                 DestroyEntity(entryState);
+
+            DestroyOrient(playerState);
         }
     }
 
@@ -269,8 +389,31 @@ public sealed partial class WorldTextHudPlugin
             foreach (var entryState in state.Entries.Values)
                 DestroyEntity(entryState);
 
+            DestroyOrient(state);
+
             SaveUserPreferences(state);
         }
+    }
+
+    private static void DestroyOrient(PlayerHudState state)
+    {
+        if (state.Orient is not { IsValidEntity: true } orient)
+        {
+            state.Orient = null;
+            state.OrientPawnAddress = 0;
+            return;
+        }
+
+        try
+        {
+            orient.Despawn();
+        }
+        catch (InvalidOperationException)
+        {
+        }
+
+        state.Orient = null;
+        state.OrientPawnAddress = 0;
     }
 
     private void SetEntryPlayerText(RegisteredEntry entry, ulong steamId, string? text)
@@ -320,7 +463,7 @@ public sealed partial class WorldTextHudPlugin
 
         if (entryState.Entity == null || !entryState.Entity.IsValidEntity)
         {
-            CreateEntityForPlayer(owner, entry, entryState);
+            CreateEntityForPlayer(owner, playerState, entry, entryState);
         }
 
         if (entryState.Entity is { IsValidEntity: true } ent)

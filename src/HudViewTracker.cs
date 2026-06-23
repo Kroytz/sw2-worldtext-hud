@@ -8,16 +8,21 @@ namespace WorldTextHud;
 public sealed partial class WorldTextHudPlugin
 {
     // Mirrors CS2Fixes ZEPlayer::CreateEntwatchHud: forward offset from the eye (origin += forward * 7.0f).
-    private const float HudForwardDistance = 7.0f;
+    internal const float HudForwardDistance = 7.0f;
 
     /// <summary>
-    /// Called every tick to reposition all active HUD entities relative to their owner's eye,
-    /// billboard-oriented to always face the player. Matches CS2Fixes' point_worldtext placement.
+    /// Called every tick to keep each player's point_orient at their eye position, mirroring the
+    /// per-frame loop in CS2Fixes CPlayerManager::UpdatePlayerStates. The orientation itself is
+    /// tracked by the engine (eEyesForward); only the position needs to be refreshed each tick.
+    /// The text entities are parented to the orient and follow automatically.
     /// </summary>
     private void OnTick()
     {
         foreach (var (steamKey, playerState) in _playerStates)
         {
+            if (playerState.Orient is not { IsValidEntity: true } orient)
+                continue;
+
             var player = Core.PlayerManager.GetPlayer(playerState.PlayerId);
             if (player == null || !player.IsValid || player.PlayerPawn is not { IsValid: true } pawn)
                 continue;
@@ -26,34 +31,8 @@ public sealed partial class WorldTextHudPlugin
             if (eyeOrigin == null)
                 continue;
 
-            var eyeAngles = pawn.EyeAngles;
-            eyeAngles.ToDirectionVectors(out var forward, out var right, out var up);
-
-            // CS2Fixes orientation: text plane always faces the eye.
-            //   angles.x = 0
-            //   angles.y = eyeYaw - 90
-            //   angles.z = -eyePitch + 90
-            var angles = new QAngle(0.0f, eyeAngles.Yaw - 90.0f, -eyeAngles.Pitch + 90.0f);
-
-            var origin = eyeOrigin.Value;
-
-            foreach (var (entryKey, entryState) in playerState.Entries)
-            {
-                if (entryState.Hidden || entryState.Entity == null || !entryState.Entity.IsValidEntity)
-                    continue;
-
-                if (!_entries.TryGetValue(entryKey, out var entry))
-                    continue;
-
-                // CS2Fixes: origin += forward * 7.0f; origin += right * X; origin -= up * Y
-                // X/Y are direct world-unit offsets (left/right, up/down).
-                var position = origin
-                    + forward * HudForwardDistance
-                    + right * entryState.X
-                    - up * entryState.Y;
-
-                entryState.Entity.Teleport(position, angles, Vector.Zero);
-            }
+            // CS2Fixes: Vector origin = pPawn->GetEyePosition(); pOrient->Teleport(&origin, nullptr, nullptr);
+            orient.Teleport(eyeOrigin.Value, null, null);
         }
     }
 }

@@ -38,6 +38,7 @@ public sealed partial class WorldTextHudPlugin : BasePlugin
         Core.Event.OnMapUnload += OnMapUnload;
         Core.Event.OnClientDisconnected += OnClientDisconnected;
         Core.Event.OnClientPutInServer += OnClientPutInServer;
+        Core.Event.OnEntitySpawned += OnEntitySpawned;
 
         RegisterAllCommands();
     }
@@ -51,6 +52,7 @@ public sealed partial class WorldTextHudPlugin : BasePlugin
         Core.Event.OnMapUnload -= OnMapUnload;
         Core.Event.OnClientDisconnected -= OnClientDisconnected;
         Core.Event.OnClientPutInServer -= OnClientPutInServer;
+        Core.Event.OnEntitySpawned -= OnEntitySpawned;
 
         UnregisterAllCommands();
         CleanupAllEntities();
@@ -92,6 +94,24 @@ public sealed partial class WorldTextHudPlugin : BasePlugin
                 return;
 
             SyncPlayerStateForEntries(player);
+        });
+    }
+
+    /// <summary>
+    /// Rebuilds a player's HUD when their pawn (re)spawns, mirroring CS2Fixes'
+    /// ZEPlayer::OnSpawn which (re)creates the point_orient and the entwatch HUD text.
+    /// </summary>
+    private void OnEntitySpawned(IOnEntitySpawnedEvent @event)
+    {
+        if (@event.Entity.DesignerName != "player")
+            return;
+
+        Core.Scheduler.NextWorldUpdate(() =>
+        {
+            if (!_loaded)
+                return;
+
+            RebuildPlayerHudForCurrentPawn(@event.Entity);
         });
     }
 
